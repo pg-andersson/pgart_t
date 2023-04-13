@@ -1,0 +1,11 @@
+
+[Unit]
+Description=Sets the indoor temperature on the heat-pump.
+Wants=pgart_control_heating.timer
+
+[Service]
+Type=simple
+ExecStart=python3 /usr/local/bin/pgart_control_heating.py
+
+[Install]
+WantedBy=multi-user.target

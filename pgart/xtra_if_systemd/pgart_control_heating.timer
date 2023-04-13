@@ -1,0 +1,13 @@
+
+[Unit]
+Description=Starts the program that sets the indoor temperature on the heat-pump.
+Requires=pgart_control_heating.service
+
+[Timer]
+Persistent=true
+OnBootSec=120
+OnCalendar=*-*-* *:00:02
+Unit=pgart_control_heating.service
+
+[Install]
+WantedBy=timers.target

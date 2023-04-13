@@ -1,0 +1,13 @@
+
+The main program must run once an hour.
+
+if systemd:
+Copy pgart_control_heating.service to /etc/systemd/system/
+Copy pgart_control_heating.timer to /etc/systemd/system/
+
+systemctl enable pgart_control_heating.service
+systemctl enable pgart_control_heating.timer
+
+
+if cron:
+2 * * * * /usr/bin/python3 /home/vp/pgart/pgart_control_heating.py >> /home/vp/pgart/var/log/hourly_run.log
