@@ -1,0 +1,323 @@
+# pg_control_thermia_heating.conf_se
+# This file is part of PGART_T (Pump Gradual Adjustment Room Temperature for Thermia Atlas).
+
+# Copyright (C) 2023 PG Andersson <pg.andersson@gmail.com>.
+
+# pgart_t is free software: you can redistribute it and/or modify it under the terms of GPL-3.0-or-later
+
+# Parameters used by pgart_t.
+# The program will set the indoor temperature via Modbus or Thermia's API.
+
+# There are seven groups of parameters to customise.
+# 1: Communication with the pump.
+
+# 2: Day and hourly schema for the adjustment of the temperature.
+#    1: Common schema.
+#    2: Schema per weekday.
+
+# 3: Hourly-rate temperature decrease based on "day-ahead prices".
+#    1: Optimised, scheduled temperature decrease.
+#    2: Temperature decrease during the hours with the highest cost.
+
+# 4: How to get the day-ahead prices.
+#    1: With one of the preinstalled programs.
+#    2: With a user coded program that acts like the preinstalled ones.
+#    3: With a stand-alone program.
+
+# 5: Increase of the indoor temperture because of the windchill effect. (Mostly valid for a house without an indoor sensor.)
+#    1: A long text with the reasoning behind the simple algoritm.
+#    2: The windchill parameters.
+
+# 6: Read the indoor temperature with a Raspberry PI equipped with a temperature sensor. Just to complement the statistics.
+
+# 7: Logging.
+
+
+#==== COMMUNICATION WITH THE PUMP ====
+# Either the web-API (online-genesis.thermia.se) or Modbus.  a=API, m=Modbus.
+pump_access_method = m
+
+# Credentials to login if online-genesis.thermia.se is used.
+login_id = xxx
+password = yyy
+
+# If ModbusTCP is used. Like 10.10.10.10.
+pump_ip_address = 10.10.10.10
+
+
+#==== DAY AND HOURLY SCHEMA FOR THE ADJUSTMENT OF THE TEMPERATURE. TWO OPTIONS THAT CAN BE COMBINED. ====
+
+# You can tell the system not to run during certain months.
+# Omit for instance June, July and August.
+set_indoor_temp_months = 01,02,03,04,05,09,10,11,12
+
+#==== 1: COMMON SCHEMA ====
+# The program controls the indoor temperature in accordance with "set_indoor_temp_hours".
+# The purpose is to stop the heating early in the evening. A low value will fix it. The temperature will anyway not drop all way down.
+# Late at night the temperature will be increased again. If in two steps it will be less stress on the pump. The rule is active every day.
+# hour_degrees, hour_degrees, ...
+set_indoor_temp_hours = 05_17, 06_20, 20_15     # Decrease at 20 and increase at 05 and 06.
+
+#==== 2: SCHEMA PER WEEKDAY ====
+# Besides the common schema there is a schema per weekday. A setting for a weekday has priority over a common setting.
+# "set_indoor_temp_weekday" settings per weekday.
+
+# You could for instance decrease the temperature when everybody is out.
+# Increase in two steps during the day to get the temperature normal back again in the afternoon. Decrease in the evening.
+# You will have breakfast in a chilly house.
+#set_indoor_temp_weekday_1 = 09_17, 12_18, 14_20, 20_15
+#set_indoor_temp_weekday_2 = 09_17, 12_18, 14_20, 20_15
+#set_indoor_temp_weekday_3 = 09_17, 12_18, 14_20, 20_15
+#set_indoor_temp_weekday_4 = 09_17, 12_18, 14_20, 20_15
+#set_indoor_temp_weekday_5 = 09_17, 12_18, 14_20, 21_15
+#set_indoor_temp_weekday_6 = 06_18, 07_20, 21_15
+#set_indoor_temp_weekday_7 = 06_18, 07_20, 20_15
+
+# Missing weekdays are ruled by "set_indoor_temp_hours".
+
+
+#==== A MANUAL CHANGE ====
+# A manual temperature setting directly on the pump or via thermia-online is valid until the last schema action of the day.
+
+
+#==== HOURLY-RATE TEMPERATURE DECREASE BASED ON "DAY-AHEAD PRICES". TWO OPTIONS ====
+# The program can decrease the temperature in accordance to the hourly-rate in addition to (and regardless of) the settings above.
+# It might be a "double" decrease.
+
+#==== 1: OPTIMISED SCHEDULED TEMPERATURE DECREASE BASED ON HOURLY-RATE ====
+use_hourly_rates = n        # y, n.
+
+# When might the program make a decrease?
+# starthour-stophour. Several intervals are supported.
+hourly_rate_decrease_hours = 8-14, 19-22
+
+# Do not decrease the heating too many hours without a break. Valid number is 1-2 hours.
+hourly_rate_only_decrease_for_this_nr_consecutive_hours = 2
+
+# Break between decreases (to not chill too much). Valid number is 1-3 hours.
+hourly_rate_min_halt_after_decrease = 1
+
+#==== 2: TEMPERATURE DECREASE DURING THE HOURS WITH THE HIGHEST COST  ====
+# An alternative to the scheduled hourly-rate decrease. Valid number is 0-24. (0 => not in use.)
+hourly_rate_decrease_during_top_hours = 0
+
+# This method can not be is use when "use_hourly_rates=y". If both are set only "use_hourly_rates=y" will work.
+
+#==== RESTRICTIONS FOR BOTH OPTIONS ====
+# Do not decrease the temperature when the price is too low. Given in the the actual currency (SEK,Euro/kWh.)
+hourly_rate_only_decrease_when_rate_above = 1.50
+
+# Decrease this number of degrees? Valid number is 1-5.
+hourly_rate_decrease_nr_grades = 2
+
+
+#==== HOW TO GET THE DAY-AHEAD PRICES. THREE OPTIONS====
+# 1: With one of the preinstalled programs.
+# 2: With a user coded program that act like the preinstalled ones.
+# 3: With a stand-alone program.
+
+# 1:
+# The system can today run the programs below to retrieve the hourly prices. You must select your el_area and
+# remove the # from it and also remove the # from the program just above it.
+
+# Sweden:
+# The hourly rates are downloaded via a free and minimalistic API from elprisetjustnu.se.
+# elprisetjustnu.se retrieves the rates from ENTSO-E. Prices in SEK.
+#pgm_create_hourly_rates = pgart_get_hourly_rates_elprisetjustnu_se.py
+#el_area = SE1
+#el_area = SE2
+#el_area = SE3
+#el_area = SE4
+
+# Norway. A website with a lot of ads, even Google Ads. A good and clean hourly-rates table.
+# A price in the table on the webpage has an addon cost. Hoover over it and the
+# real day-ahead price will be shown which is used by this system. Prices in NOK.
+#pgm_create_hourly_rates = pgart_get_hourly_rates_minspotpris_no.py
+#el_area = ost
+#el_area = sor
+#el_area = vest
+#el_area = midt
+#el_area = nord
+
+# Finland. Herrfors is an electricity transportation company in Österbotten. A clean straightforward website. Prices in EURO.
+#pgm_create_hourly_rates = pgart_get_hourly_rates_herrforsnat_fi.py
+#el_area = finland
+
+# The Nordic and The Baltic states:
+# ENTSO-E Transparency Platform. transparency.entsoe.eu. Central collection and publication of electricity generation,
+# transportation and consumption data and information for the pan-European market.
+# ENTSO-E has an open free API but to use it you need an account. pgart_t therefore scrapes the webpage for the rates.
+# The URLs are complex. They will likely change now and then. All prices in EURO.
+
+#pgm_create_hourly_rates = pgart_get_hourly_rates_entsoe_eu.py
+#el_area = SE1
+#el_area = SE2
+#el_area = SE3
+#el_area = SE4
+
+#el_area = DK1
+#el_area = DK2
+
+#el_area = NO1
+#el_area = NO2
+#el_area = NO2NSl
+#el_area = NO3
+#el_area = NO4
+#el_area = NO5
+
+#el_area = FI
+#el_area = EE
+#el_area = LV
+#el_area = LT
+
+# 2:
+# If you add a program with similar functionality and add a line as the one below
+# then the program will be run with the arguments: "area=  logreq=  maxlog=".
+# "el_area" will be the one you have select (above). logreq= and maxlog= will take values from this file.
+#pgm_create_hourly_rates = external-python-program-in-the-bin-directory
+
+# 3:
+# An alternative: The system can also run a stand-alone program with its own arguments.
+#external_pgm_create_hourly_rates = external-python-program-in-the-bin-directory, arg1, arg2 ....
+# Like: external_pgm_create_hourly_rates=dummy.py, arg1, arg2
+
+
+#==== ADDITIONAL ABOUT HOURLY AND MONTHLY PRICES  ====
+# If you have a contract with fixed monthly price and just want to compare hourly and monthly costs then all the prices must be downloaded.
+# It will be for the "el_area" you have selected above.
+create_hourly_rates = n    # y, n.
+
+# The monthly rates. Select program and day.
+# The values in the current month is a forecast, new every day.
+create_monthly_rates_when = e # d (daily) daily or e (end) only on the last day in the month. Save some runnings.
+
+# The next line works only in Sweden. "el_area" will be the one you have selected for Sweden above.
+# logreq= and maxlog= will take values from this config file.
+#external_pgm_create_monthly_rates = pgart_get_monthly_rates_elbruk_se.py
+
+# An alternative: The system can also run a stand-alone program with its own arguments.
+#external_pgm_create_monthly_rates = external-python-program-in-the-bin-directory, arg1, arg2 ....
+
+
+#==== INCREASE OF THE INDOOR TEMPERTURE BECAUSE OF THE WINDCHILL EFFECT. (MOSTLY VALID FOR A HOUSE WITHOUT AN INDOOR SENSOR) ====
+
+#====                         A LONG TEXT WITH THE REASONING BEHIND THE SIMPLE ALGORITM                             ====
+# The program can, in addition to the schemas above, increase the indoor temperature according to the windchill effect.
+# A cool wind will of cause not impact the outdoor sensor but on a drafty and not so well insulated house it will.
+# The result of the cooling effect will be equivalent to a much lower real outdoor temperature. The room temperature will thus
+# be lower than the indoor temperature setting. A room sensor could have helped. Thermia does not encourage room sensors.
+#
+# The program tries to compensate for the decrease of the room temperature (when it is windy) by a temporary increase of the
+# indoor temperature. The intention is to let the pump act as if the outdoor temperature is lower then the real temperature.
+
+# Forecasts for the wind force and temperature will be downloaded from SMHI.
+# A windchill temperature will be calculated so it corresponds to the temperature it should have been if it was calm.
+# For example: -5 when it is calm corresponds to a -11 windchill temperature when the wind force is 5 m/s.
+# The pump uses -5 and thus the room temperature will be too low. The pump should have heated as if it was 6 degrees lower outdoor temperature.
+#
+# The following can be deduced from Thermia's documentation and the pump display:
+# - If the outdoor temperature decreases by 1 degree the supply line temperature will increase by 1 degree.
+# - A 1 degree increase of the indoor temperature will increase the supply line temperature by 2-3 degrees.
+# - The maximun supply line temperature is 60 degrees. Due to the scales on the pump this will be reached
+#   when -25 out/+20 indoors or -15 out/+23 indoors.
+
+# For each 2.5 (average of 2-3) degrees of temperature difference the indoor temperature is increased by 1 degree to get
+# the desired room temperature. The supply line will also increase by 2.5 degrees.
+
+# Calculation method:
+# Step 1: Calculate the max allowed indoor temperature increase which still will keep the supply line temperature below 60 degrees.
+# max_allowed_increase = (lowest_possible_outdoor_temp_to_keep_supply_line_below_60 - outdoor_temp)/ 2.5.
+# An example in numbers: abs((-25 - -15))/2.5 = 4 degrees max_allowed_increase.
+
+# Step 2: Calculate the required indoor temperature increase to make up for the difference between windchill- and outdoor temperature.
+# required_increase = (windchill_temp - outdoor_temp)/2.5.
+# An example in numbers: (-17 - -10)/2.5 = about -3 degrees shortfall =>  3 degrees required increase.
+
+# Step 3: Is the increase allowed?
+# If required_increase > max_allowed_increase
+#      set the required_increase = max_allowed_increase.
+
+#Step 4: Is the increase bigger than the max allowed increase set by the program?
+# If required_increase > the parameter "windchill_max_indoor_temp_increase"
+#       set the required_increase = windchill_max_indoor_temp_increase.
+
+# Example:
+# Wind 5 m/s and 0 degrees outdoor temperature will render a windchill temperature of -5.
+# max increase: (25 - 0)/2.5 = 10 degrees.
+# (5 - 0)/2.5 = 2 degrees increase.
+# 2 < 10 so the indoor temperature can be increased by 2 degrees. The pump should act as if it was -5 outdoors.
+
+# Example:
+# Wind 15 m/s and -15 degrees outdoor temperature will render a windchill temperature of -29.
+# max increase:  (25 - 15)/2.5 = 4 degrees.
+# (29 - 15)/2.5 = 6 degrees increase.
+# 6 > 4 means that the indoor temperature can only be increased by 4 degrees.
+# With 4 degrees increase of the indoor temperature the pump should act as if the outdoor temp was -25. This gives a supply line temp of 60.
+# It was thus not possible to fully compensate for the windchill temperature -29. Happens seldom.
+
+
+#====  THE WINDCHILL PARAMETERS ====
+# The system retrieves the forecasts from SMHI.
+
+# The system can also run an external program to get the forecasts. See the info document for the file layout requirements.
+# external_pgm_create_forecasts=python-program-in-bin-directory, arg1, arg2 ...
+#external_pgm_create_forecasts=dummy.py,arg1, arg2
+
+use_windchill_compensation = n  # y, n.
+
+# To activate the function the apparent temperature must be at least a few degrees colder than the real temperature. 1-6 grader.
+windchill_min_apparent_temp_diff = 3
+
+# The calculated increase must not force the pump to act as if the outdoor temperature was too low. Not lower than -26.
+windchill_lower_limit_apparent_temp = -25
+
+# Increase range 1-4 degrees.
+windchill_max_indoor_temp_increase = 3
+
+# Increase the temperature ahead of the chilling wind. 0-2 hours.
+windchill_use_forecast_this_nr_hours_ahead = 1
+
+# Do not increase the temperature when it intentionally shall be low.
+windchill_adjust_only_when_set_indoor_temp_is_above = 17    # 15-22 degrees.
+
+# The location of your house might be in a less or more windy place than the observation point.
+# You can adjust the wind strength by setting the factor between 0.5 and 1.5.
+windchill_wind_force_factor = 0.7
+
+# To retrieve the forecasts you have to provide the "latitude, longitude" of your house.
+# You can get it from Google Maps. Right click on your location on the map. A pop up window will show numbers like "56.789, 12.3456".
+my_lat=56.789   #Kattegat, a place with the coordinates 1234 56789.
+my_lon=12.34
+
+
+#====  READ THE INDOOR TEMPERATURE WITH A RASPBERRY PI EQUIPPED WITH A TEMPERATURE SENSOR  ====
+
+# In the summary log you can get the indoor temperature if the system is on a raspberry pi with a temperature sensor.
+read_external_indoor_sensor = n     # y, n.
+
+# The system can also run a user provided program. It shall also store the temperature in the file.
+#external_pgm_read_indoor_sensor=dummy.py, arg1, arg2 ...
+
+
+#==== LOGGING ====
+# Logfiles are rotated once a week. Choose a weekday. 1-7. 0=no log rotation.
+rotate_log_files_this_weekday_nr = 1
+keep_nr_rotated_log_files = 3  # 2-10.
+
+# Additional logging. 1,2,3,4,5,6 together means full logging.
+# 0 no additional logging.
+# 1 this systems configuration.
+# 2 the configuration retrieved via Thermia's API.
+# 3 information about the pump retrieved via Thermia's API.
+# 4 the optimised hourly-rates table (based on the configuration.)
+# 5 hour-rates tables with temperature decreases.
+# 6 detailed logging of the communication with Thermia's webserver (a lot of data.)
+verbose_logging = 1,2
+
+#====  DO NOT FILL THE LOG WITH JUNK. ====
+# The HTML responses for logging in are large. About 2000 lines and at least 150 Kbyte. Even the response from SMHI is big.
+max_log_len = 1000  # In bytes.
+
+
+
+

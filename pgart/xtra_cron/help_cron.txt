@@ -1,0 +1,5 @@
+
+The main program must run once an hour.
+Add the next line via crontab. Replace "your-user" with your user.
+
+2 * * * * /usr/bin/python3 /home/your-user/pgart/pgart_control_heating.py >> /home/your-user/pgart/var/log/hourly_run.log

@@ -1,0 +1,313 @@
+# pg_control_thermia_heating.conf_se
+# This file is part of PGART_T (Pump Gradual Adjustment Room Temperature for Thermia Atlas).
+
+# Copyright (C) 2023 PG Andersson <pg.andersson@gmail.com>.
+
+# pgart_t is free software: you can redistribute it and/or modify it under the terms of GPL-3.0-or-later
+
+# Parametrarna här används av pgart_t.
+# Programmet sätter pumpens börvärde (önskad innetemperatur) via Modbus eller Thermias API.
+
+# Det finns sju grupper av parametrar att anpassa.
+# 1: Kommunikation med pumpen.
+
+# 2: Dag- och tim-scheman för temperaturreglering.
+#    1: Generellt schema.
+#    2: Schema per veckodag.
+
+# 3: Timprisbaserad temperatursänkning baserat på "day-ahead prices".
+#    1: Optimerad schemalagd timprisbaserad temperatusänkning.
+#    2: Timprisbaserad temperatusänkning under de dyraste timmarna.
+
+# 4: Att hämta "day-ahead prices".
+#    1: With one of the preinstalled programs.
+#    2: With a user coded program that acts like the preinstalled ones.
+#    3: With a stand-alone program.
+
+# 5: Temperaturhöjning pga vindens kyleffekt. (Mest för hus utan rumsgivare).
+#    1: En sida med tankarna bakom den enkla algorimen.
+#    2: Parametrarna för kylande vind.
+
+# 6: Läs rumstemperaturen med en raspberry pi utrustad med en temperatur sensor. Kompletterar statistiken.
+
+# 7: Logging.
+
+
+#==== KOMMUNIKATION MED PUMPEN ====
+# Antingen webb-APIet (online-genesis.thermia.se) eller Modbus.  a=API, m=Modbus.
+pump_access_method = m
+
+# Användaruppgifterna för att logga in om online-genesis.thermia.se används.
+login_id = yyy
+password = xxx
+
+# Om ModbusTCP används. t.ex 10.10.10.10.
+pump_ip_address = 10.10.10.10
+
+#==== DAG- och TIM-SCHEMAN FÖR TEMPERATURREGLERING. TVÅ VARIANTER SOM KAN KOMBINERAS. ====
+
+# Det är nog inte meningsfullt att reglera under årets alla månader. Här väljer du vilka.
+# Hoppa t.ex. över juni, juli och augusti.
+set_indoor_temp_months = 01,02,03,04,05,09,10,11,12
+
+#==== 1: GENERELLT SCHEMA ====
+# Programmet reglerar innetemperaturen enligt "set_indoor_temp_hours".
+# Avsikten är att få stopp på pumpen så därför sätts ett lågt värde tidigt på kvällen. Innetemperaturen faller nog inte hela vägen.
+# Sent på natten höjs temperaturen igen. Lämpligen i ett par steg. Lika för veckans alla dagar.
+# timme_gradtal, timme_gradtal, ...
+set_indoor_temp_hours = 05_17, 06_20, 20_15         # Sänker kl 20 och höjer kl 05 och 06.
+
+#==== 2: SCHEMA PER VECKODAG ====
+# Utöver det generella schemat finns ett schema för varje enskild veckodag. En regel för enskild veckodag gäller före den generella regeln..
+# "set_indoor_temp_weekday" används för att reglera per veckodag. T.ex. bara normal värme under eftermiddag och kväll arbetsdagar/skoldagar.
+# I exemplet nedan. Man får äta frukost i kylan.
+
+# Höj i steg på dagen så det är varmt när man kommer hem från jobb eller skola. Sänk igen kl 20 på kvällen.
+# Man får äta frukost i ett svalt hus.
+#set_indoor_temp_weekday_1 = 09_17, 12_18, 14_20, 20_15
+#set_indoor_temp_weekday_2 = 09_17, 12_18, 14_20, 20_15
+#set_indoor_temp_weekday_3 = 09_17, 12_18, 14_20, 20_15
+#set_indoor_temp_weekday_4 = 09_17, 12_18, 14_20, 20_15
+#set_indoor_temp_weekday_5 = 09_17, 12_18, 14_20, 21_15
+#set_indoor_temp_weekday_6 = 06_18, 07_20, 21_15
+#set_indoor_temp_weekday_7 = 06_18, 07_20, 20_15
+
+# De veckodagar som inte finns med regleras av "set_indoor_temp_hours".
+
+
+#==== Manuell ÄNDRING ====
+# Om man ändrat temperaturen direkt på pumpen eller via thermia-online så gäller den tills dagens sista schemakörning.
+
+
+#==== TIMPRISBASERAD TEMPERATURSÄNKNING BASERAT PÅ "DAY-AHEAD PRICES". TVÅ VARIANTER ====
+# Oberoende av vad som satts i reglerna ovan kan programmet sänka börvärdet beroende på timpriset.
+# Det kan alltså bli en "dubbelsänkning".
+
+#==== 1: OPTIMERAD SCHEMALAGD TIMPRISBASERAD TEMPERATUSÄNKNING ====
+use_hourly_rates = n    # y, n.
+
+# Under vilka timmar kan timprisbasered temperatursänkning ske?
+# starttimme-stopptimme. Flera intervall möjligt. Passa t.ex. på att sänka när ingen är i huset.
+hourly_rate_decrease_hours = 8-15, 20-22
+
+# Sänk inte värmen för många timmar i sträck. Anges i heltal timmar. 1-2.
+hourly_rate_only_decrease_for_this_nr_consecutive_hours = 2
+
+# Uppehåll mellan temperatursänkningar så huset inte blir för kallt. Anges i heltal timmar. 1-3.
+hourly_rate_min_halt_after_decrease = 1
+
+#==== 2: TIMPRISBASERAD TEMPERATUSÄNKNING UNDER DE DYRASTE TIMMARNA ====
+# Ett alternativ till schemalagd timprisbasered sänkning. Ange antalet dyrtimmar, 0-24. (0 => inte aktiv.)
+hourly_rate_decrease_during_top_hours = 0
+
+# Denna metod kan inte kombineras med "use_hourly_rates=y". Om båda satts gäller bara "use_hourly_rates=y".
+
+#==== BEGRÄNSNINGSREGLER FÖR BÅDA VARIANTERNA ====
+# Man kanske bara ska sänka temperaturen om det är ett tillräckligt högt timpris. Anges i SEK,Euro/kWh.
+hourly_rate_only_decrease_when_rate_above = 1.50
+
+# Hur många grader skall temperaturen sänkas? Anges i heltal grader. 1-5.
+hourly_rate_decrease_nr_grades = 2
+
+
+#==== ATT HÄMTA "DAY-AHEAD PRICES" ====
+
+#1:
+# Systemet kan i dagsläget köra något av programmen nedan för att hämta timpriserna.
+# Tag bort # för den el_area som ditt elområde tillhör. Och även # för programmet som hämtar data för el_arean ifråga.
+
+# Sverige:
+# Timpriserna hämtas från ett gratis enkelt API som elprisetjustnu.se tillhandahåller.
+# elprisetjustnu.se hämtar i sin tur priserna från ENTSO-E. Priser i SEK.
+#pgm_create_hourly_rates = pgart_get_hourly_rates_elprisetjustnu_se.py
+#el_area = SE1
+#el_area = SE2
+#el_area = SE3
+#el_area = SE4
+
+# Norge. En sida med reklam, även riktad sådan från Google. Bra timpristabell dock. Pris i NOK.
+# Tabellpriset som visas på hemsidan har ett tillägg. Håller man musen över ett sådant visas
+# det riktiga day-ahead priset som används här.
+#pgm_create_hourly_rates = pgart_get_hourly_rates_minspotpris_no.py
+#el_area = ost
+#el_area = sor
+#el_area = vest
+#el_area = midt
+#el_area = nord
+
+# Finland. Herrfors är en elleverantör i Österbotten med en enkel och tydlig hemsida med spotpriserna. Pris i EURO.
+#pgm_create_hourly_rates = pgart_get_hourly_rates_herrforsnat_fi.py
+#el_area = finland
+
+# Norden och Baltikcum:
+# ENTSO-E Transparency Platform. transparency.entsoe.eu. ENTSO-E har ett öppet gratis API men det kräver att användaren har ett konto där.
+# pgart_t hämtar timpriset från hemsidan istället. Men med komplexa URler som förmodligen ändras över tiden.
+# Alla priser, oberoende av land, i EURO (Cent). Omvandlas inte i systemet.
+
+#pgm_create_hourly_rates = pgart_get_hourly_rates_entsoe_eu.py
+#el_area = SE1
+#el_area = SE2
+#el_area = SE3
+#el_area = SE4
+
+#el_area = DK1
+#el_area = DK2
+
+#el_area = NO1
+#el_area = NO2
+#el_area = NO2NSl
+#el_area = NO3
+#el_area = NO4
+#el_area = NO5
+
+#el_area = FI
+#el_area = EE
+#el_area = LV
+#el_area = LT
+
+#2:
+# Om du installerar ett program med motsvarande funktionalitet och lägger upp en konfigureringsrad
+# som den nedan så startas programmet med argumenten: "area=  logreq=  maxlog=".
+# "el_area" blir det du valt ovan. logreq= och maxlog= får värden från denna fil.
+#pgm_create_hourly_rates = external-program-in-the-bin-directory
+
+#3:
+# En variant: Du kan också installera ett program som behöver en helt annan argumentlista.
+#external_pgm_create_hourly_rates = external-program-in-the-bin-directory arg1 arg2 ....
+# Ett exampel: external_pgm_create_hourly_rates = dummy.py arg1 arg2
+
+
+#==== EXTRA OM TIM- OCH MÅNADSPRIS  ====
+# Om man har månadspris och vill jämföra tim- och månadspris så behöver man ladda ned tim- och månadspriser.
+# Det blir för det program och "el_area" du valt ovan.
+create_hourly_rates = n     # y, n.
+
+# Månadspriserna. Välj program och dag för körningen.
+# Eftersom det är löpande prognoser får nuvarande månad bäst värde om den körs sista dagen. Kan vara onödigt att hämta varje dag.
+create_monthly_rates_when = e # d (daily) hämta dagligen eller e (end) bara på månadens sista dag.
+
+# Bara för Sverige. "el_area" blir det du valt för Sverige ovan. logreq= och maxlog= får värden från denna konfigfil.
+#external_pgm_create_monthly_rates = pgart_get_monthly_rates_elbruk_se.py
+
+# En variant: Du kan också installera ett program med egna argument.
+#external_pgm_create_monthly_rates = external-python-program-in-the-bin-directory, arg1, arg2 ....
+
+
+#==== TEMPERATURHÖJNING PGA VINDENS KYLEFFEKT (MEST FÖR HUS UTAN RUMSGIVARE) ====
+
+#====              EN SIDA MED TANKARNA BAKOM DEN ENKLA ALGORIMEN                      ====
+# Programmet kan, oberoende av schemana ovan, höja börvärdet beroende på kylande vindar. Utetemperaturgivaren känner ju ej av vinden.
+# När det blåser orsakar vindens kylverkan på husets klimatskal större än vis vinsstilla.
+# Ett dragigt hus kyls också mer av en kall vind. Pumpen styrs oftast enbart av den yttre temperaturmätaren som ju inte kan känna
+# av vindens kylverkan. Innetemperaturen blir alltså lägre än förväntat när det blåser. En rumsgivare kunde hjälpt.
+# Thermia uppmuntrar inte en rumsgivare.
+#
+# Programmet kan försöka kompensera temperaturfallet inomhus de timmar det blåser kallt genom att tillfälligt och i förväg sätta
+# ett högre börvärde än den normala. Avsikten är att få pumpen att reagera som om det är lägre temperatur ute än det som termometern visar.
+
+# Vinddata för ortens temperatur och vindstyrka hämtas från SMHI.
+# Med dessa beräknas "vindkyletemperaturen" som motsvarar temperaturen det skulle varit om det varit vindstilla istället.
+# T.ex. -5 grader vid vindstilla motsvarar -11 graders kylverkan vid vindstyrkan 5 m/s. Pumpen värmer efter det vindstilla värdet -5
+# och då blir det ju kallare än förväntat i huset. Pumpen borde istället värmt som om det var 6 grader kallare ute.
+#
+# Thermias dokumentation och pumpens display ger i grova drag:
+# - att om yttertemperaturen sjunker med 1 grad så höjs framledningstemperaturen med ungefär 1 grad.
+# - att 1 grads höjning av temperaturen inomhus höjer framledningstemperaturen med 2-3 grader.
+# - att max normal framledningstemp är 60 grader. Enligt pumpens skalor nås det vid t.ex -25 ute/+20 inne eller vid -15 ute/+23 inne.
+
+# Värmeproduktionen behöver alltså ökas när vindkyletemperaturen är klart lägre än verklig temperatur.
+# Summariskt kan man säga att programmet beräknar skillnaden mellan temperaturerna och för att få önskad innetemperatur höjs börvärdet
+# med 1 grad per ca 2.5 graders skillnad vilket i sin tur leder till att pumpen ökar framledningstemperaturen med just 2.5 grader.
+
+# Beräkningsmetod:
+# Steg 1: Beräkna maximalt tillåten temperaturhöjning för att hålla framledningstemperaturen under 60 grader.
+# maximalt_tillåten_höjning = (lägsta_möjliga_utetemp_för_att_hålla_framledningstempen_under_60 - yttertemperatur)/ 2.5.
+# Ex i siffror: abs((-25 - -15))/2.5 = 4 graders maximalt_tillåten_höjning.
+
+# Steg 2: Beräkna önskad innetemperaturhöjning för att kompensera för skillnaden mellan vindkyletemperaturen och yttertemperaturen.
+# önskad_höjning = (vindkyletemperaturen - yttertemperaturen)/2.5.
+# Ex i siffror: (-17 - -10)/2.5 = ca -3 graders underskott =>  3 graders önskad höjning.
+
+# Steg 3: Är höjningen tillåten?
+# Om önskad_höjning > maximalt_tillåten_höjning
+#       så sätt önskad_höjning = maximalt_tillåten_höjning.
+
+#Steg 4: Är höjningen större än det som maximalt tillåts för programmet?
+# Om önskad_höjning > parametern "windchill_max_indoor_temp_increase"
+#       så sätt önskad_höjning = windchill_max_indoor_temp_increase.
+
+# Exempel:
+# Vind 5 m/s och 0 grader ute ger vindkyletemperaturen -5.
+# max höjning: (25 - 0)/2.5 = 10 grader
+# (5 - 0)/2.5 = 2 graders höjning.
+# 2 < 10 alltså kan börvärdet ökas med 2 grader. Pumpen bör då agera som vid -5 ute.
+
+# Exempel:
+# Vind 15 m/s och -15 grader ute ger vindkyletemperaturen -29.
+# max höjning: (25 - 15)/2.5 = 4 grader.
+# (29 - 15)/2.5 = 6 graders höjning.
+# 6 > 4 alltså kan börvärdet bara ökas med högst 4 grader.
+# Med 4 graders ökning av börvärdet bör pumpen agera som vid -25 ute vilket ger framledningstemperaturen 60.
+# Det gick alltså inte att helt kompensera för vindkyletemperaturen -29. Men sådant väder har vi sällan.
+
+
+#====  PARAMETRARNA FÖR KYLANDE VIND. ====
+# Programmet hämtar prognoserna från SMHI.
+
+# Systemet kan istället köra ett externt program för att hämta prognoserna. Se info dokumentet för resultatfilens layout.
+# external_pgm_create_forecasts=program-i-bin-katalogen, arg1, arg2 ...
+#external_pgm_create_forecasts=dummy.py, arg1, arg2
+
+use_windchill_compensation = n  # y, n.
+
+# För att aktivera funktionen måste vindkyleffekten vara minst några grader kallare än verklig temperatur. 1-6 grader.
+windchill_min_apparent_temp_diff = 3
+
+# Kompensationen får inte beräknas så yttertemperaturen verkar lägre än detta värde. Ej lägre än -26.
+windchill_lower_limit_apparent_temp = -25
+
+# Öka med 1-4 grader.
+windchill_max_indoor_temp_increase = 3
+
+# Öka någon timme i förväg så pumpen hinner få upp värmen tills kylan slår in. 0-2 timmar.
+windchill_use_forecast_this_nr_hours_ahead = 1
+
+# Öka inte temperaturen när det avsiktligt skall vara låg inomhustemperatur.
+windchill_adjust_only_when_set_indoor_temp_is_above = 18    # Någonstans mellan 15-22 grader.
+
+# Bor du i lä så sätt faktorn mindre än 1.0. Tvärtom för ett blåshål. 0.5 - 1.5.
+windchill_wind_force_factor = 0.7
+
+# För att hämta prognoser från SMHI behövs ungefärliga koordinater i decimalformat för området där ditt hus ligger.
+# Zooma in och högerklicka i Google Maps på platsen du bor så visas typ "56.789, 12.3456" överst i popup-fönstret. Det är platsens "latitude, longitude".
+my_lat=56.789   #Kattegat, en plats med koordinaterna 1234 56789.
+my_lon=12.34
+
+
+#====  LÄS RUMSTEMPERATUREN MED EN RASPBERRY PI UTRUSTAD MED EN TEMPERATUR SENSOR  ====
+
+# I timloggen kan man få med inomhustemperaturen om systemet kör i en raspberry pi som har en temperatur sensor.
+read_external_indoor_sensor = n
+
+# Systemet kan också/istället köra ett program som du fixat. Det ska också spara innetemperaturen i en fil.
+#external_pgm_read_indoor_sensor=dummy.py, arg1, arg2 ...
+
+
+#==== LOGGNING ====
+# Loggfilerna roteras varje vecka. De roteras första körningen denna veckodag. 1-7. 0=ingen log rotation.
+rotate_log_files_this_weekday_nr = 1
+keep_nr_rotated_log_files = 3  # 2-10.
+
+# Extra loggning. 1,2,3,4,5,6 samtidigt betyder mesta möjliga loggning.
+# 0 ingen extra loggning.
+# 1 konfigureringens parametrar.
+# 2 Thermias konfigurering hämtat via webbservern.
+# 3 pumpinformation hämtat via webbservern.
+# 4 optimerad timpristabell (baserad på konfigureringens parametrar).
+# 5 timpristabeller med temperatursänkning.
+# 6 detaljerad loggning av kommunikationen med Thermias webbserver (blir mycket data.)
+verbose_logging = 1,2
+
+#==== KNÄCK INTE LOGGEN MED (I NORMALFALLET) RÄTT OVIDKOMMANDE SKRÄP ====
+# Ett html response från påloggningen är stort. Nästan 2000 rader och minst 150 Kbyte. Även SMHIs response är stort.
+max_log_len = 1000  # Anges i bytes.

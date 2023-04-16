@@ -1,0 +1,34 @@
+
+Explanations to the the log entries.
+
+Debug help:
+L1, L2 and L3 are the positions of logging calls in pgart_control_heating.py.
+
+Scheduled processing to set the desired indoor temperature:
+100000 New_schema. The system acts on a scheduled change in set_indoor_temp_hours = 05_17, 06_20, 20_15.
+000000 No_schema. There is not any scheduled change for this hour.
+000001 Set_manually. The desired temperature has been set manually in between two runs.
+
+Hourly-rate processing:
+000100 set_hour. The desired indoor temperature is decreased by hr_rate:2.
+010000 (re)set_hour. The desired indoor temperature is increased back to normal temperature by hr_rate:2.
+
+Windchill processing:
+000010 set_hour. The desired indoor temperature is increased by windchill:1.
+001000 (re)reset_hour. The desired indoor temperature is decreased back to normal temperature by windchill:1.
+
+out:2       is the temperature read from the outdoor sensor of the pump.
+room:200    is the temperature read from the room sensor of the pump. If a room sensor is not installed the value is 200.
+sensor:20.2 is the temperature read from a raspberry with a room temperature sensor.
+pump:21     is the "heatingEffect" (the desired indoor temperature) read from the pump.
+new:21      is the new desired indoor temperature to be set by the program.
+
+hr_rate:2   is the number of degrees adjustment of the desired temperature caused by hourly-rates.
+windshill:1 is the number of degrees adjustment of the desired temperature caused by the windchill effect.
+
+For both hr_rate and windshill:
+off         No adjustment this hour.
+set_hour    + or - adjustment of the desired temperature this hour.
+reset_hour  reset the adjustment of the desired temperature this hour.
+
+--------------------------------------------------------------------------------------------------------------------------
